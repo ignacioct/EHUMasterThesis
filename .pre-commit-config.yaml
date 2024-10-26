@@ -1,0 +1,31 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.1  # Ruff version
+    hooks:
+      - id: ruff
+        args: ["--fix", "--exclude", "frontend"]
+      - id: ruff-format
+        args: ["--exclude", "frontend"]
+      - id: ruff
+        name: ruff-check-imports
+        args: ["check", "--select", "I", "--fix", "--exclude", "frontend"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-docstring-first
+      - id: check-json
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        name: gitlint
+        language: python
+        entry: gitlint
+        args: ["--staged", "--msg-filename"]
+        stages: [commit-msg]

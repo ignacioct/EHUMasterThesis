@@ -1,0 +1,5 @@
+datasets
+pandas
+seaborn
+ipykernel
+pre-commit
