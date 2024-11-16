@@ -3,3 +3,4 @@ pandas
 seaborn
 ipykernel
 pre-commit
+tqdm
