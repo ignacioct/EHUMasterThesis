@@ -39,7 +39,7 @@ def process_symbolic_link(symlink_path: str, subdirectory_level_1: bool = True) 
 
 
 class WikidataExtractor:
-    def __init__(self, wikidata_dump_path):
+    def __init__(self, wikidata_dump_path: str, output_path: Union[str, None] = None):
         self.wikidata_dump_path = process_symbolic_link(wikidata_dump_path)
 
         # Define the slots for the person and organization entities
@@ -82,6 +82,12 @@ class WikidataExtractor:
 
         self.slots_counter = {k: 0 for k in self.slots_id_list}
 
+        self.wikidata_triplets_df = pd.DataFrame(
+            columns=["q_id", "q_name", "p_id", "p_name", "p_value", "p_value_type"]
+        )
+
+        self.output_path = output_path
+
     def extract(
         self,
         counter: int = 10000,
@@ -101,7 +107,6 @@ class WikidataExtractor:
                 for each slot. If None, the counter parameter is used. Defaults to None.
             batch_size (int, optional): The number of rows to accumulate before returning
                 the data as a DataFrame. Defaults to 1000.
-
 
         Returns:
             pd.DataFrame: The extracted data as a pandas DataFrame.
@@ -242,7 +247,8 @@ class WikidataExtractor:
                     [output_df, pd.DataFrame(output_rows)], ignore_index=True
                 )
 
-        return output_df
+        self.wikidata_triplets_df = output_df
+        return self.wikidata_triplets_df
 
     def extract_with_generator(
         self, batch_size: int = 10000, slot_limit: int = 333
@@ -275,6 +281,7 @@ class WikidataExtractor:
             batch_df = pd.DataFrame(rows)
             # Save remaining data
 
+        self.wikidata_triplets_df = batch_df
         return batch_df
 
     def extract_generator(
@@ -499,6 +506,92 @@ class WikidataExtractor:
 
         This function processes the Wikibase item value from the Wikidata dump.
 
+        Args:
+            prop_values (dict): The property values from the Wikidata dump.
+
+        Returns:
+            str: The Wikibase item value.
         """
 
         return prop_values[0]["mainsnak"]["datavalue"]["value"]["id"]
+
+    def translate_wikibase_items(self) -> pd.DataFrame:
+        """
+        Translate Wikibase items to their English labels.
+
+        This function translates Wikibase items to their English labels using a dictionary
+        created from the Wikidata dump file. It updates the property values in the DataFrame
+        and returns the updated DataFrame.
+
+        Returns:
+            pd.DataFrame: The updated DataFrame with the Wikibase items translated to English labels.
+        """
+
+        q_value_to_label = self.get_q_value_to_label()
+
+        for index, row in tqdm(
+            self.wikidata_triplets_df.iterrows(),
+            total=len(self.wikidata_triplets_df),
+            desc="Translating Wikibase items",
+            unit="row",
+        ):
+            if row["p_value_type"] == "wikibase-item":
+                q_id = row["p_value"]
+                q_label = q_value_to_label.get(q_id)
+                if q_label:
+                    self.wikidata_triplets_df.at[index, "p_value"] = q_label
+
+        return self.wikidata_triplets_df
+
+    def get_q_value_to_label(self) -> dict:
+        """
+        Create a dictionary to translate Wikibase items.
+
+        This function reads the Wikidata dump file line by line, parses the JSON data,
+        and creates a dictionary to translate Wikibase items.
+
+        Returns:
+            dict: The dictionary to translate Wikibase items.
+        """
+
+        q_value_to_label = {}
+
+        with bz2.open(self.wikidata_dump_path, mode="rb") as f:
+            with tqdm(
+                desc="Creating the dictionary to translate wikibase items", unit="line"
+            ) as pbar:
+                for _, line in enumerate(f):
+                    try:
+                        line_str = line.decode("utf-8").rstrip(",\n")
+                        if line_str in ["[", "]"] or len(line_str) == 0:
+                            continue
+
+                        item = json.loads(line_str)
+                        if item.get("type") == "item":
+                            q_id = item["id"]
+                            q_label = item.get("labels", {}).get("en", {}).get("value")
+                            if q_label:
+                                q_value_to_label[q_id] = q_label
+
+                        pbar.update(1)
+
+                    except KeyError:
+                        # Handle missing expected keys in the property data
+                        continue
+
+                    except ValueError:
+                        continue
+
+        return q_value_to_label
+
+    def save_to_csv(self, output_path: str) -> None:
+        """
+        Save the extracted data to a CSV file.
+
+        This function saves the extracted data to a CSV file.
+
+        Args:
+            output_path (str): The path to save the CSV file.
+        """
+
+        self.wikidata_triplets_df.to_csv(output_path, index=False)
