@@ -11,7 +11,7 @@ def main() -> None:
     )
     extractor.extract_with_generator()
     extractor.translate_wikibase_items()
-    extractor.save_dataframe_to_csv()
+    extractor.save_to_csv()
 
 
 if __name__ == "__main__":

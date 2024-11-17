@@ -584,14 +584,11 @@ class WikidataExtractor:
 
         return q_value_to_label
 
-    def save_to_csv(self, output_path: str) -> None:
+    def save_to_csv(self) -> None:
         """
         Save the extracted data to a CSV file.
 
         This function saves the extracted data to a CSV file.
-
-        Args:
-            output_path (str): The path to save the CSV file.
         """
 
-        self.wikidata_triplets_df.to_csv(output_path, index=False)
+        self.wikidata_triplets_df.to_csv(self.output_path, index=False)
