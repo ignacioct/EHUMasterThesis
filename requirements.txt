@@ -4,3 +4,4 @@ seaborn
 ipykernel
 pre-commit
 tqdm
+transformers
