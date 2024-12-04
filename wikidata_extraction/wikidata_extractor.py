@@ -2,7 +2,7 @@ import bz2
 import json
 import os
 from datetime import datetime
-from typing import Generator, Union
+from typing import Generator, List, Union
 
 import pandas as pd
 from tqdm import tqdm
@@ -583,6 +583,405 @@ class WikidataExtractor:
                         continue
 
         return q_value_to_label
+
+    def save_to_csv(self) -> None:
+        """
+        Save the extracted data to a CSV file.
+
+        This function saves the extracted data to a CSV file.
+        """
+
+        self.wikidata_triplets_df.to_csv(self.output_path, index=False)
+
+
+class WikidataExtractorQValues:
+    def __init__(
+        self,
+        wikidata_dump_path: str,
+        focus_q_values: List[str],
+        output_path: Union[str, None] = None,
+    ):
+        self.wikidata_dump_path = process_symbolic_link(wikidata_dump_path)
+
+        # Define the slots for the person and organization entities
+        self.slots_name2id = {
+            "charge": "P1595",
+            "relative": "P1038",
+            "sibling": "P3373",
+            "father": "P22",
+            "mother": "P25",
+            "child": "P40",
+            "spouse": "P26",
+            "religion_or_worldview": "P140",
+            "employer": "P108",
+            "member_of": "P463",
+            "noble_title": "P97",
+            "educated_at": "P69",
+            "residence": "P551",
+            "country_of_citizenship": "P27",
+            "cause_of_death": "P509",
+            "place_of_death": "P20",
+            "date_of_death": "P570",
+            "place_of_birth": "P19",
+            "date_of_birth": "P569",
+            "alternative_name": "P4970",
+            "official_website": "P856",
+            "owned_by": "P127",
+            "headquarters_location": "P159",
+            "dissolved_abolished_or_demolished": "P576",
+            "inception": "P571",
+            "founder": "P112",
+            "parent_organization": "P749",
+            "subsidiary": "P355",
+            "number_of_employees": "P1128",
+            "number_of_members": "P1129",
+        }
+
+        self.focus_q_values = focus_q_values
+
+        self.slots_id2name = {v: k for k, v in self.slots_name2id.items()}
+
+        self.slots_id_list = list(self.slots_name2id.values())
+
+        self.wikidata_triplets_df = pd.DataFrame(
+            columns=["q_id", "q_name", "p_id", "p_name", "p_value", "p_value_type"]
+        )
+
+        self.output_path = output_path
+
+    def extract_with_generator(self, batch_size: int = 10000) -> pd.DataFrame:
+        """
+        Extract the relevant data from the Wikidata dump file using a generator.
+
+        This function reads the Wikidata dump file line by line, parses the JSON data,
+        and extracts the relevant information for the specified properties. It accumulates
+        the extracted data into a pandas DataFrame and returns it.
+
+        Args:
+            batch_size (int, optional): The number of rows to accumulate before returning
+                the data as a DataFrame. Defaults to 10000.
+
+        Returns:
+            pd.DataFrame: The extracted data as a pandas DataFrame.
+        """
+        rows = []
+        for row in self.extract_generator():
+            rows.append(row)
+            if len(rows) >= batch_size:
+                batch_df = pd.DataFrame(rows)
+                # Save to CSV or append to final DataFrame
+                rows = []
+
+        if rows:
+            batch_df = pd.DataFrame(rows)
+            # Save remaining data
+
+        self.wikidata_triplets_df = batch_df
+        return batch_df
+
+    def extract_generator(self) -> Generator[dict, None, None]:
+        """
+        Extract the relevant data from the Wikidata dump file using a generator.
+
+        This functions returns the generator to extract the relevant data from the Wikidata dump file.
+        In this version, we only extract the data for the focus Q-values, and we ignore the slots that were already extracted in the previous extraction.
+
+        Yields:
+            dict: The extracted data as a dictionary.
+        """
+
+        counter = 0
+        with bz2.open(self.wikidata_dump_path, mode="rb") as f:
+            with tqdm(desc="Processing lines", unit="line") as pbar:
+                for i, line in enumerate(f):
+                    try:
+                        line_str = line.decode("utf-8").rstrip(",\n")
+                        if line_str in ["[", "]"] or len(line_str) == 0:
+                            continue
+
+                        item = json.loads(line_str)
+                        if item.get("type") == "item":
+                            q_id = item["id"]
+                            q_name = item.get("labels", {}).get("en", {}).get("value")
+
+                            # We only want to extract the data for the focus Q-values
+                            if not q_name or q_id not in self.focus_q_values:
+                                continue
+
+                            for prop_id, prop_values in item.get("claims", {}).items():
+                                # We dont want slots that were already extracted
+                                if prop_id in self.slots_id_list:
+                                    continue
+
+                                try:
+                                    p_value_type = prop_values[0]["mainsnak"][
+                                        "datatype"
+                                    ]
+                                    p_value = self.process_p_value(
+                                        prop_values, p_value_type
+                                    )
+
+                                    yield {
+                                        "q_id": q_id,
+                                        "q_name": q_name,
+                                        "p_id": prop_id,
+                                        "p_name": "Unknown",
+                                        "p_value": p_value,
+                                        "p_value_type": p_value_type,
+                                    }
+
+                                    counter += 1
+
+                                    self.slots_counter[prop_id] += 1
+
+                                    pbar.update(1)
+
+                                    # Stop conditions
+
+                                    # If we reach 9000 lines
+                                    if counter >= 9000:
+                                        return
+
+                                except KeyError:
+                                    continue
+
+                                except ValueError:
+                                    continue
+
+                    except json.JSONDecodeError:
+                        continue
+                    except UnicodeDecodeError:
+                        continue
+                    except Exception as e:
+                        print(f"Error at line {i}: {e}")
+                        continue
+
+    def process_p_value(self, prop_values: dict, p_value_type: str) -> str:
+        """
+        Process the property value based on its datatype.
+
+        This function processes the property value based on its datatype and
+        returns the processed value as a string.
+
+        Args:
+            prop_values (dict): The property values from the Wikidata dump.
+            p_value_type (str): The datatype of the property value.
+
+        Returns:
+            str: The processed property value as a string.
+        """
+
+        if p_value_type == "quantity":
+            return self.process_quantity(prop_values)
+        elif p_value_type == "string":
+            return self.process_string(prop_values)
+        elif p_value_type == "time":
+            return self.process_time(prop_values)
+        elif p_value_type == "url":
+            return self.process_url(prop_values)
+        elif p_value_type == "wikibase-item":
+            return self.process_wikibase_item(prop_values)
+        else:
+            raise ValueError(f"Unsupported property value type: {p_value_type}")
+
+    def process_quantity(self, prop_values: dict) -> float:
+        """
+        Process the quantity value from the Wikidata dump.
+
+        This function processes the quantity value from the Wikidata dump, which
+        includes the amount and the unit. It returns the amount as a float value.
+
+        Args:
+            prop_values (dict): The property values from the Wikidata dump.
+
+        Returns:
+            float: The quantity amount as a float value.
+        """
+
+        quantity = prop_values[0]["mainsnak"]["datavalue"]["value"]["amount"]
+
+        # If quantity starts by +, remove it
+        if quantity.startswith("+"):
+            quantity = quantity[1:]
+
+        return float(quantity)
+
+    def process_string(self, prop_values: dict) -> str:
+        """
+        Process the string value from the Wikidata dump.
+
+        This function processes the string value from the Wikidata dump.
+
+        Args:
+            prop_values (dict): The property values from the Wikidata dump.
+
+        Returns:
+            str: The string value.
+        """
+
+        return prop_values[0]["mainsnak"]["datavalue"]["value"]
+
+    def process_time(self, prop_values: dict) -> str:
+        """
+        Process the time value from the Wikidata dump.
+
+        This function processes the time value from the Wikidata dump, which
+        includes the timestamp and timezone offset. It returns the timestamp
+        as a human-readable string.
+
+        Example of wikipedia time format: "+2021-08-01T00:00:00Z"
+
+        Args:
+            prop_values (dict): The property values from the Wikidata dump.
+
+        Returns:
+            str: The human-readable timestamp string.
+        """
+
+        time_dict = prop_values[0]["mainsnak"]["datavalue"]["value"]
+
+        iso_time = time_dict["time"]
+
+        # Remove the leading '+' if present
+        if iso_time.startswith("+"):
+            iso_time = iso_time[1:]
+
+        # Parse the ISO 8601 timestamp
+        dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
+
+        # Format the date and time into a readable string
+        readable_time = dt.strftime("%B %d, %Y at %I:%M:%S %p")
+
+        # Add CE designation (since we know it's not BCE due to the original '+')
+        readable_time += " CE"
+
+        # Add timezone information
+        timezone = time_dict["timezone"]
+        if timezone == 0:
+            tz_info = "UTC"
+        else:
+            tz_info = f"UTC{'+' if timezone >= 0 else ''}{timezone}"
+
+        return f"{readable_time} {tz_info}"
+
+    def process_url(self, prop_values: dict) -> str:
+        """
+        Process the URL value from the Wikidata dump.
+
+        This function processes the URL value from the Wikidata dump.
+
+        Args:
+            prop_values (dict): The property values from the Wikidata dump.
+
+        Returns:
+            str: The URL value.
+        """
+
+        return prop_values[0]["mainsnak"]["datavalue"]["value"]
+
+    def process_wikibase_item(self, prop_values: dict) -> str:
+        """
+        Process the Wikibase item value from the Wikidata dump.
+
+        This function processes the Wikibase item value from the Wikidata dump.
+
+        Args:
+            prop_values (dict): The property values from the Wikidata dump.
+
+        Returns:
+            str: The Wikibase item value.
+        """
+
+        return prop_values[0]["mainsnak"]["datavalue"]["value"]["id"]
+
+    def translate_wikibase_items(self) -> pd.DataFrame:
+        """
+        Translate Wikibase items to their English labels.
+
+        This function translates Wikibase items to their English labels using a dictionary
+        created from the Wikidata dump file. It updates the property values in the DataFrame
+        and returns the updated DataFrame.
+
+        Returns:
+            pd.DataFrame: The updated DataFrame with the Wikibase items translated to English labels.
+
+        """
+
+        q_value_to_label, p_value_to_label = self.get_q_p_value_to_label()
+
+        for index, row in tqdm(
+            self.wikidata_triplets_df.iterrows(),
+            total=len(self.wikidata_triplets_df),
+            desc="Translating Wikibase items",
+            unit="row",
+        ):
+            if row["p_value_type"] == "wikibase-item":
+                q_id = row["p_value"]
+                q_label = q_value_to_label.get(q_id)
+                if q_label:
+                    self.wikidata_triplets_df.at[index, "p_value"] = q_label
+
+        for index, row in tqdm(
+            self.wikidata_triplets_df.iterrows(),
+            total=len(self.wikidata_triplets_df),
+            desc="Translating Wikibase relations",
+            unit="row",
+        ):
+            if row["p_id"] in p_value_to_label:
+                p_label = p_value_to_label.get(row["p_id"])
+                self.wikidata_triplets_df.at[index, "p_name"] = p_label
+
+        return self.wikidata_triplets_df
+
+    def get_q_p_value_to_label(self) -> dict:
+        """
+        Create a dictionary to translate Wikibase items.
+
+        This function reads the Wikidata dump file line by line, parses the JSON data,
+        and creates a dictionary to translate Wikibase items.
+
+        Returns:
+            dict: The dictionary to translate Wikidata items.
+            dict: The dictionary to translate Wikidata relations
+        """
+
+        q_value_to_label = {}
+        p_value_to_label = {}
+
+        with bz2.open(self.wikidata_dump_path, mode="rb") as f:
+            with tqdm(
+                desc="Creating the dictionary to translate wikibase items", unit="line"
+            ) as pbar:
+                for _, line in enumerate(f):
+                    try:
+                        line_str = line.decode("utf-8").rstrip(",\n")
+                        if line_str in ["[", "]"] or len(line_str) == 0:
+                            continue
+
+                        item = json.loads(line_str)
+                        if item.get("type") == "item":
+                            q_id = item["id"]
+                            q_label = item.get("labels", {}).get("en", {}).get("value")
+                            if q_label:
+                                q_value_to_label[q_id] = q_label
+
+                        if item.get("type") == "property":
+                            print(item)
+                            p_id = item["id"]
+                            p_label = item.get("labels", {}).get("en", {}).get("value")
+                            if p_label:
+                                p_value_to_label[p_id] = p_label
+
+                        pbar.update(1)
+
+                    except KeyError:
+                        # Handle missing expected keys in the property data
+                        continue
+
+                    except ValueError:
+                        continue
+
+        return q_value_to_label, p_value_to_label
 
     def save_to_csv(self) -> None:
         """
