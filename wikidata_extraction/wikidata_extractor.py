@@ -732,8 +732,6 @@ class WikidataExtractorQValues:
 
                                     counter += 1
 
-                                    self.slots_counter[prop_id] += 1
-
                                     pbar.update(1)
 
                                     # Stop conditions
@@ -959,6 +957,7 @@ class WikidataExtractorQValues:
                             continue
 
                         item = json.loads(line_str)
+
                         if item.get("type") == "item":
                             q_id = item["id"]
                             q_label = item.get("labels", {}).get("en", {}).get("value")
@@ -966,7 +965,6 @@ class WikidataExtractorQValues:
                                 q_value_to_label[q_id] = q_label
 
                         if item.get("type") == "property":
-                            print(item)
                             p_id = item["id"]
                             p_label = item.get("labels", {}).get("en", {}).get("value")
                             if p_label:
