@@ -110,7 +110,10 @@ class WikidataExtractor:
             columns=["q_id", "q_name", "p_id", "p_name", "p_value", "p_value_type"]
         )
 
-        counter = 0
+        counter_person = 0
+        counter_organization = 0
+        limit_person = total_limit // 2
+        limit_organization = total_limit // 2
 
         # Create an output .csv file to append each row in each iteration
         if self.output_path:
@@ -121,10 +124,6 @@ class WikidataExtractor:
             # Use tqdm for a progress bar
             with tqdm(desc="Processing lines", unit="line", total=total_limit) as pbar:
                 for i, line in enumerate(f):
-                    # Stop if we reach the total limit
-                    if counter >= total_limit:
-                        break
-
                     try:
                         # Decode the line and clean unnecessary characters
                         line_str = line.decode("utf-8").rstrip(",\n")
@@ -146,7 +145,8 @@ class WikidataExtractor:
                                 continue
 
                             output_rows = []
-                            instance_of_present = False
+                            is_instance_of_person = False
+                            is_instance_of_organization = False
 
                             # Iterate through the item's claims (properties)
                             for prop_id, prop_values in item.get("claims", {}).items():
@@ -181,14 +181,12 @@ class WikidataExtractor:
 
                                     # Check if the entity is a person or organization
                                     if p_id == self.slots_name2id["instance_of"]:
-                                        if p_value == "Q43229" or p_value == "Q5":
+                                        if p_value == "Q43229":
+                                            is_instance_of_organization = True
+                                        elif p_value == "Q5":
                                             # Avoid use Q215627 for P31, use Q5 instead
                                             # https://www.wikidata.org/wiki/Q215627
-                                            instance_of_present = True
-
-                                    # Also stop if we reach the total limit
-                                    if counter >= total_limit:
-                                        break
+                                            is_instance_of_person = True
 
                                 except KeyError:
                                     # Handle missing expected keys in the property data
@@ -198,7 +196,7 @@ class WikidataExtractor:
                                     continue
 
                             # We only want to extract the data for the person and organization entities
-                            if instance_of_present:
+                            if is_instance_of_person and counter_person < limit_person:
                                 # Append the rows to the output .csv file
                                 if self.output_path:
                                     pd.DataFrame(output_rows).to_csv(
@@ -208,8 +206,30 @@ class WikidataExtractor:
                                         index=False,
                                     )
 
-                                counter += 1  # Increment the counter
+                                counter_person += 1  # Increment the counter
                                 pbar.update(1)  # Update the progress bar
+
+                            elif (
+                                is_instance_of_organization
+                                and counter_organization < limit_organization
+                            ):
+                                # Append the rows to the output .csv file
+                                if self.output_path:
+                                    pd.DataFrame(output_rows).to_csv(
+                                        self.output_path,
+                                        mode="a",
+                                        header=False,
+                                        index=False,
+                                    )
+
+                                counter_organization += 1
+                                pbar.update(1)  # Update the progress bar
+
+                            if (
+                                counter_person >= limit_person
+                                and counter_organization >= limit_organization
+                            ):
+                                break
 
                     except json.JSONDecodeError as json_err:
                         print(f"JSON decoding error at line {i}: {json_err}")
