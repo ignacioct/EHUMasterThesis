@@ -74,6 +74,7 @@ class WikidataExtractor:
             "subsidiary": "P355",
             "number_of_employees": "P1128",
             "number_of_members": "P1129",
+            "instance_of": "P31",
         }
 
         self.slots_id2name = {v: k for k, v in self.slots_name2id.items()}
@@ -88,7 +89,7 @@ class WikidataExtractor:
 
     def extract(
         self,
-        total_limit: int = 50000,
+        total_limit: int = 100000,
     ) -> pd.DataFrame:
         """
         Extract the relevant data from the Wikidata dump file.
@@ -98,7 +99,7 @@ class WikidataExtractor:
         the extracted data into a pandas DataFrame and returns it.
 
         Args:
-            total_limit (int, optional): The number of lines to process.
+            total_limit (int, optional): The number of unique Q-values to process.
 
         Returns:
             pd.DataFrame: The extracted data as a pandas DataFrame.
@@ -144,6 +145,9 @@ class WikidataExtractor:
                             if not q_name:
                                 continue
 
+                            output_rows = []
+                            instance_of_present = False
+
                             # Iterate through the item's claims (properties)
                             for prop_id, prop_values in item.get("claims", {}).items():
                                 # Process only properties of interest
@@ -164,27 +168,23 @@ class WikidataExtractor:
                                     )
 
                                     # Append the data as a new row in the DataFrame
-                                    output_row = {
-                                        "q_id": q_id,
-                                        "q_name": q_name,
-                                        "p_id": prop_id,
-                                        "p_name": p_name,
-                                        "p_value": p_value,
-                                        "p_value_type": p_value_type,
-                                    }
+                                    output_rows.append(
+                                        {
+                                            "q_id": q_id,
+                                            "q_name": q_name,
+                                            "p_id": prop_id,
+                                            "p_name": p_name,
+                                            "p_value": p_value,
+                                            "p_value_type": p_value_type,
+                                        }
+                                    )
 
-                                    # Append the row to the output .csv file
-                                    if self.output_path:
-                                        pd.DataFrame([output_row]).to_csv(
-                                            self.output_path,
-                                            mode="a",
-                                            header=False,
-                                            index=False,
-                                        )
-
-                                    counter += 1  # Increment the counter
-
-                                    pbar.update(1)  # Update the progress bar
+                                    # Check if the entity is a person or organization
+                                    if p_id == self.slots_name2id["instance_of"]:
+                                        if p_value == "Q43229" or p_value == "Q5":
+                                            # Avoid use Q215627 for P31, use Q5 instead
+                                            # https://www.wikidata.org/wiki/Q215627
+                                            instance_of_present = True
 
                                     # Also stop if we reach the total limit
                                     if counter >= total_limit:
@@ -196,6 +196,20 @@ class WikidataExtractor:
 
                                 except ValueError:
                                     continue
+
+                            # We only want to extract the data for the person and organization entities
+                            if instance_of_present:
+                                # Append the rows to the output .csv file
+                                if self.output_path:
+                                    pd.DataFrame(output_rows).to_csv(
+                                        self.output_path,
+                                        mode="a",
+                                        header=False,
+                                        index=False,
+                                    )
+
+                                counter += 1  # Increment the counter
+                                pbar.update(1)  # Update the progress bar
 
                     except json.JSONDecodeError as json_err:
                         print(f"JSON decoding error at line {i}: {json_err}")
