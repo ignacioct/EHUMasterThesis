@@ -104,8 +104,6 @@ class WikidataExtractor:
             pd.DataFrame: The extracted data as a pandas DataFrame.
         """
 
-        output_rows = []  # Collect rows here
-
         # Initialize the output DataFrame with predefined columns
         output_df = pd.DataFrame(
             columns=["q_id", "q_name", "p_id", "p_name", "p_value", "p_value_type"]
@@ -120,8 +118,12 @@ class WikidataExtractor:
         # Open the compressed file
         with bz2.open(self.wikidata_dump_path, mode="rb") as f:
             # Use tqdm for a progress bar
-            with tqdm(total=counter, desc="Processing lines", unit="line") as pbar:
+            with tqdm(desc="Processing lines", unit="line", total=total_limit) as pbar:
                 for i, line in enumerate(f):
+                    # Stop if we reach the total limit
+                    if counter >= total_limit:
+                        break
+
                     try:
                         # Decode the line and clean unnecessary characters
                         line_str = line.decode("utf-8").rstrip(",\n")
@@ -162,20 +164,18 @@ class WikidataExtractor:
                                     )
 
                                     # Append the data as a new row in the DataFrame
-                                    output_rows.append(
-                                        {
-                                            "q_id": q_id,
-                                            "q_name": q_name,
-                                            "p_id": prop_id,
-                                            "p_name": p_name,
-                                            "p_value": p_value,
-                                            "p_value_type": p_value_type,
-                                        }
-                                    )
+                                    output_row = {
+                                        "q_id": q_id,
+                                        "q_name": q_name,
+                                        "p_id": prop_id,
+                                        "p_name": p_name,
+                                        "p_value": p_value,
+                                        "p_value_type": p_value_type,
+                                    }
 
                                     # Append the row to the output .csv file
                                     if self.output_path:
-                                        pd.DataFrame([output_rows[-1]]).to_csv(
+                                        pd.DataFrame([output_row]).to_csv(
                                             self.output_path,
                                             mode="a",
                                             header=False,
