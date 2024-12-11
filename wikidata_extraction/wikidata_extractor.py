@@ -80,8 +80,6 @@ class WikidataExtractor:
 
         self.slots_id_list = list(self.slots_name2id.values())
 
-        self.slots_counter = {k: 0 for k in self.slots_id_list}
-
         self.wikidata_triplets_df = pd.DataFrame(
             columns=["q_id", "q_name", "p_id", "p_name", "p_value", "p_value_type"]
         )
@@ -90,9 +88,7 @@ class WikidataExtractor:
 
     def extract(
         self,
-        counter: int = 10000,
-        slot_limit: Union[int, None] = None,
-        batch_size: int = 1000,
+        total_limit: int = 50000,
     ) -> pd.DataFrame:
         """
         Extract the relevant data from the Wikidata dump file.
@@ -102,11 +98,7 @@ class WikidataExtractor:
         the extracted data into a pandas DataFrame and returns it.
 
         Args:
-            counter (int, optional): The number of lines to process. Defaults to 10000.
-            slot_limit (Union[int, None], optional): The maximum number of entities to extract
-                for each slot. If None, the counter parameter is used. Defaults to None.
-            batch_size (int, optional): The number of rows to accumulate before returning
-                the data as a DataFrame. Defaults to 1000.
+            total_limit (int, optional): The number of lines to process.
 
         Returns:
             pd.DataFrame: The extracted data as a pandas DataFrame.
@@ -120,20 +112,16 @@ class WikidataExtractor:
         )
 
         counter = 0
-        # If the slot counter is not None, we won't use the counter parameter to limit the number of rows
-        if slot_limit is not None:
-            counter = None
+
+        # Create an output .csv file to append each row in each iteration
+        if self.output_path:
+            output_df.to_csv(self.output_path, index=False)
 
         # Open the compressed file
         with bz2.open(self.wikidata_dump_path, mode="rb") as f:
             # Use tqdm for a progress bar
             with tqdm(total=counter, desc="Processing lines", unit="line") as pbar:
                 for i, line in enumerate(f):
-                    # Stop processing if the counter reaches zero
-                    if counter is not None and counter == 0:
-                        pbar.close()
-                        return output_df  # Return the accumulated DataFrame
-
                     try:
                         # Decode the line and clean unnecessary characters
                         line_str = line.decode("utf-8").rstrip(",\n")
@@ -165,13 +153,6 @@ class WikidataExtractor:
                                     p_id = prop_id
                                     p_name = self.slots_id2name.get(p_id, "Unknown")
 
-                                    # Check that the slot is not already filled
-                                    if (
-                                        slot_limit is not None
-                                        and self.slots_counter[p_id] >= slot_limit
-                                    ):
-                                        continue
-
                                     # Get the first property's value and its datatype
                                     p_value_type = prop_values[0]["mainsnak"][
                                         "datatype"
@@ -192,34 +173,21 @@ class WikidataExtractor:
                                         }
                                     )
 
-                                    counter += 1  # Increment the counter
-
-                                    # Add the slot type to the slots counter
-                                    self.slots_counter[p_id] += 1
-
-                                    if counter is not None:
-                                        counter -= 1  # Decrement the counter
-
-                                    if len(output_rows) >= batch_size:
-                                        output_df = pd.concat(
-                                            [output_df, pd.DataFrame(output_rows)],
-                                            ignore_index=True,
+                                    # Append the row to the output .csv file
+                                    if self.output_path:
+                                        pd.DataFrame([output_rows[-1]]).to_csv(
+                                            self.output_path,
+                                            mode="a",
+                                            header=False,
+                                            index=False,
                                         )
-                                        output_rows = []
+
+                                    counter += 1  # Increment the counter
 
                                     pbar.update(1)  # Update the progress bar
 
-                                    # Stop if all slots are filled
-                                    if all(
-                                        [
-                                            v >= slot_limit
-                                            for v in self.slots_counter.values()
-                                        ]
-                                    ):
-                                        break
-
-                                    # Also stop if we reach 9000 lines
-                                    if counter >= 9000:
+                                    # Also stop if we reach the total limit
+                                    if counter >= total_limit:
                                         break
 
                                 except KeyError:
@@ -241,141 +209,8 @@ class WikidataExtractor:
                         print(f"Error type: {type(e)}")
                         break
 
-            # Add remaining rows
-            if output_rows:
-                output_df = pd.concat(
-                    [output_df, pd.DataFrame(output_rows)], ignore_index=True
-                )
-
-        self.wikidata_triplets_df = output_df
+        self.wikidata_triplets_df = pd.read_csv(self.output_path)
         return self.wikidata_triplets_df
-
-    def extract_with_generator(
-        self, batch_size: int = 10000, slot_limit: int = 333
-    ) -> pd.DataFrame:
-        """
-        Extract the relevant data from the Wikidata dump file using a generator.
-
-        This function reads the Wikidata dump file line by line, parses the JSON data,
-        and extracts the relevant information for the specified properties. It accumulates
-        the extracted data into a pandas DataFrame and returns it.
-
-        Args:
-            batch_size (int, optional): The number of rows to accumulate before returning
-                the data as a DataFrame. Defaults to 10000.
-            slot_limit (int, optional): The maximum number of entities to extract
-                for each slot. Defaults to 333.
-
-        Returns:
-            pd.DataFrame: The extracted data as a pandas DataFrame.
-        """
-        rows = []
-        for row in self.extract_generator(slot_limit):
-            rows.append(row)
-            if len(rows) >= batch_size:
-                batch_df = pd.DataFrame(rows)
-                # Save to CSV or append to final DataFrame
-                rows = []
-
-        if rows:
-            batch_df = pd.DataFrame(rows)
-            # Save remaining data
-
-        self.wikidata_triplets_df = batch_df
-        return batch_df
-
-    def extract_generator(
-        self, slot_limit: int, lines_limit: int = 10000
-    ) -> Generator[dict, None, None]:
-        """
-        Extract the relevant data from the Wikidata dump file using a generator.
-
-        This functions returns the generator to extract the relevant data from the Wikidata dump file.
-
-        Args:
-            slot_limit (int): The maximum number of entities to extract for each slot.
-            lines_limit (int, optional): The maximum number of lines to process. Defaults to 10000.
-
-        Yields:
-            dict: The extracted data as a dictionary.
-        """
-
-        counter = 0
-        with bz2.open(self.wikidata_dump_path, mode="rb") as f:
-            with tqdm(desc="Processing lines", unit="line") as pbar:
-                for i, line in enumerate(f):
-                    try:
-                        line_str = line.decode("utf-8").rstrip(",\n")
-                        if line_str in ["[", "]"] or len(line_str) == 0:
-                            continue
-
-                        item = json.loads(line_str)
-                        if item.get("type") == "item":
-                            q_id = item["id"]
-                            q_name = item.get("labels", {}).get("en", {}).get("value")
-                            if not q_name:
-                                continue
-
-                            for prop_id, prop_values in item.get("claims", {}).items():
-                                if prop_id not in self.slots_id_list:
-                                    continue
-
-                                if self.slots_counter[prop_id] >= slot_limit:
-                                    continue
-
-                                try:
-                                    p_value_type = prop_values[0]["mainsnak"][
-                                        "datatype"
-                                    ]
-                                    p_value = self.process_p_value(
-                                        prop_values, p_value_type
-                                    )
-
-                                    yield {
-                                        "q_id": q_id,
-                                        "q_name": q_name,
-                                        "p_id": prop_id,
-                                        "p_name": self.slots_id2name.get(
-                                            prop_id, "Unknown"
-                                        ),
-                                        "p_value": p_value,
-                                        "p_value_type": p_value_type,
-                                    }
-
-                                    counter += 1
-
-                                    self.slots_counter[prop_id] += 1
-
-                                    pbar.update(1)
-
-                                    # Stop conditions
-
-                                    # Stop if all slots are filled
-                                    if all(
-                                        [
-                                            v >= slot_limit
-                                            for v in self.slots_counter.values()
-                                        ]
-                                    ):
-                                        return
-
-                                    # Also stop if we reach 9000 lines
-                                    if counter >= 9000:
-                                        return
-
-                                except KeyError:
-                                    continue
-
-                                except ValueError:
-                                    continue
-
-                    except json.JSONDecodeError:
-                        continue
-                    except UnicodeDecodeError:
-                        continue
-                    except Exception as e:
-                        print(f"Error at line {i}: {e}")
-                        continue
 
     def process_p_value(self, prop_values: dict, p_value_type: str) -> str:
         """
