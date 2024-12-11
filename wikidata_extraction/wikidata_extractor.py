@@ -2,7 +2,7 @@ import bz2
 import json
 import os
 from datetime import datetime
-from typing import Generator, List, Union
+from typing import List, Union
 
 import pandas as pd
 from tqdm import tqdm
@@ -484,57 +484,55 @@ class WikidataExtractorQValues:
 
         self.output_path = output_path
 
-    def extract_with_generator(self, batch_size: int = 10000) -> pd.DataFrame:
+    def extract(
+        self,
+        total_limit: int = 50000,
+    ) -> pd.DataFrame:
         """
-        Extract the relevant data from the Wikidata dump file using a generator.
+        Extract the relevant data from the Wikidata dump file.
 
         This function reads the Wikidata dump file line by line, parses the JSON data,
         and extracts the relevant information for the specified properties. It accumulates
         the extracted data into a pandas DataFrame and returns it.
 
         Args:
-            batch_size (int, optional): The number of rows to accumulate before returning
-                the data as a DataFrame. Defaults to 10000.
+            total_limit (int, optional): The number of lines to process.
 
         Returns:
             pd.DataFrame: The extracted data as a pandas DataFrame.
         """
-        rows = []
-        for row in self.extract_generator():
-            rows.append(row)
-            if len(rows) >= batch_size:
-                batch_df = pd.DataFrame(rows)
-                # Save to CSV or append to final DataFrame
-                rows = []
 
-        if rows:
-            batch_df = pd.DataFrame(rows)
-            # Save remaining data
-
-        self.wikidata_triplets_df = batch_df
-        return batch_df
-
-    def extract_generator(self) -> Generator[dict, None, None]:
-        """
-        Extract the relevant data from the Wikidata dump file using a generator.
-
-        This functions returns the generator to extract the relevant data from the Wikidata dump file.
-        In this version, we only extract the data for the focus Q-values, and we ignore the slots that were already extracted in the previous extraction.
-
-        Yields:
-            dict: The extracted data as a dictionary.
-        """
+        # Initialize the output DataFrame with predefined columns
+        output_df = pd.DataFrame(
+            columns=["q_id", "q_name", "p_id", "p_name", "p_value", "p_value_type"]
+        )
 
         counter = 0
+
+        # Create an output .csv file to append each row in each iteration
+        if self.output_path:
+            output_df.to_csv(self.output_path, index=False)
+
+        # Open the compressed file
         with bz2.open(self.wikidata_dump_path, mode="rb") as f:
-            with tqdm(desc="Processing lines", unit="line") as pbar:
+            # Use tqdm for a progress bar
+            with tqdm(desc="Processing lines", unit="line", total=total_limit) as pbar:
                 for i, line in enumerate(f):
+                    # Stop if we reach the total limit
+                    if counter >= total_limit:
+                        break
+
                     try:
+                        # Decode the line and clean unnecessary characters
                         line_str = line.decode("utf-8").rstrip(",\n")
+
+                        # Skip irrelevant or empty lines
                         if line_str in ["[", "]"] or len(line_str) == 0:
                             continue
 
+                        # Parse the line as JSON
                         item = json.loads(line_str)
+
                         if item.get("type") == "item":
                             q_id = item["id"]
                             q_name = item.get("labels", {}).get("en", {}).get("value")
@@ -543,12 +541,27 @@ class WikidataExtractorQValues:
                             if not q_name or q_id not in self.focus_q_values:
                                 continue
 
+                        # Process only "item" type entities
+                        if item.get("type") == "item":
+                            q_id = item["id"]
+
+                            # Attempt to get the English label; skip if not available
+                            q_name = item.get("labels", {}).get("en", {}).get("value")
+                            if not q_name:
+                                continue
+
+                            # Iterate through the item's claims (properties)
                             for prop_id, prop_values in item.get("claims", {}).items():
-                                # We dont want slots that were already extracted
-                                if prop_id in self.slots_id_list:
+                                # Process only properties of interest
+                                if prop_id not in self.slots_id_list:
                                     continue
 
                                 try:
+                                    # Extract property details
+                                    p_id = prop_id
+                                    p_name = self.slots_id2name.get(p_id, "Unknown")
+
+                                    # Get the first property's value and its datatype
                                     p_value_type = prop_values[0]["mainsnak"][
                                         "datatype"
                                     ]
@@ -556,38 +569,54 @@ class WikidataExtractorQValues:
                                         prop_values, p_value_type
                                     )
 
-                                    yield {
+                                    # Append the data as a new row in the DataFrame
+                                    output_row = {
                                         "q_id": q_id,
                                         "q_name": q_name,
                                         "p_id": prop_id,
-                                        "p_name": "Unknown",
+                                        "p_name": p_name,
                                         "p_value": p_value,
                                         "p_value_type": p_value_type,
                                     }
 
-                                    counter += 1
+                                    # Append the row to the output .csv file
+                                    if self.output_path:
+                                        pd.DataFrame([output_row]).to_csv(
+                                            self.output_path,
+                                            mode="a",
+                                            header=False,
+                                            index=False,
+                                        )
 
-                                    pbar.update(1)
+                                    counter += 1  # Increment the counter
 
-                                    # Stop conditions
+                                    pbar.update(1)  # Update the progress bar
 
-                                    # If we reach 9000 lines
-                                    if counter >= 9000:
-                                        return
+                                    # Also stop if we reach the total limit
+                                    if counter >= total_limit:
+                                        break
 
                                 except KeyError:
+                                    # Handle missing expected keys in the property data
                                     continue
 
                                 except ValueError:
                                     continue
 
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as json_err:
+                        print(f"JSON decoding error at line {i}: {json_err}")
                         continue
-                    except UnicodeDecodeError:
+                    except UnicodeDecodeError as unicode_err:
+                        print(f"Unicode decoding error at line {i}: {unicode_err}")
                         continue
                     except Exception as e:
-                        print(f"Error at line {i}: {e}")
-                        continue
+                        print(f"Unexpected error at line {i}: {e}")
+                        print(f"Error happened at line {i} with content: {line_str}")
+                        print(f"Error type: {type(e)}")
+                        break
+
+        self.wikidata_triplets_df = pd.read_csv(self.output_path)
+        return self.wikidata_triplets_df
 
     def process_p_value(self, prop_values: dict, p_value_type: str) -> str:
         """
