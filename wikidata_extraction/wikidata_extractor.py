@@ -89,7 +89,7 @@ class WikidataExtractor:
 
     def extract(
         self,
-        total_limit: int = 100000,
+        total_limit: int = 20000,
     ) -> pd.DataFrame:
         """
         Extract the relevant data from the Wikidata dump file.
