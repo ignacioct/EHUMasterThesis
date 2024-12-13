@@ -81,10 +81,6 @@ class WikidataExtractor:
 
         self.slots_id_list = list(self.slots_name2id.values())
 
-        self.wikidata_triplets_df = pd.DataFrame(
-            columns=["q_id", "q_name", "p_id", "p_name", "p_value", "p_value_type"]
-        )
-
         self.output_path = output_path
 
     def extract(
@@ -102,7 +98,7 @@ class WikidataExtractor:
             total_limit (int, optional): The number of unique Q-values to process.
 
         Returns:
-            pd.DataFrame: The extracted data as a pandas DataFrame.
+            str: The path to the output .csv file.
         """
 
         # Initialize the output DataFrame with predefined columns
@@ -243,8 +239,7 @@ class WikidataExtractor:
                         print(f"Error type: {type(e)}")
                         break
 
-        self.wikidata_triplets_df = pd.read_csv(self.output_path)
-        return self.wikidata_triplets_df
+        return self.output_path
 
     def process_p_value(self, prop_values: dict, p_value_type: str) -> str:
         """
@@ -384,7 +379,7 @@ class WikidataExtractor:
 
         return prop_values[0]["mainsnak"]["datavalue"]["value"]["id"]
 
-    def translate_wikibase_items(self) -> pd.DataFrame:
+    def translate_wikibase_items(self, json_path: Union[str, None]) -> pd.DataFrame:
         """
         Translate Wikibase items to their English labels.
 
@@ -392,15 +387,32 @@ class WikidataExtractor:
         created from the Wikidata dump file. It updates the property values in the DataFrame
         and returns the updated DataFrame.
 
+        Args:
+            json_path (str, None): The path to the JSON file containing the q_value_to_label dictionary.
+
         Returns:
-            pd.DataFrame: The updated DataFrame with the Wikibase items translated to English labels.
+            str: The path to the output .csv file.
         """
 
-        q_value_to_label = self.get_q_value_to_label()
+        if json_path is None:
+            # Create a dictionary to translate Wikibase items
+            q_value_to_label = self.get_q_value_to_label()
+
+            # Output q_value_to_label dictionary to a file
+            with open("q_value_to_label.json", "w") as f:
+                print("Saving q_value_to_label dictionary to q_value_to_label.json")
+                json.dump(q_value_to_label, f)
+        else:
+            # Load the q_value_to_label dictionary from the JSON file
+            with open(json_path, "r") as f:
+                q_value_to_label = json.load(f)
+
+        # Open the output .csv file
+        wikidata_triplets_df = pd.read_csv(self.output_path)
 
         for index, row in tqdm(
-            self.wikidata_triplets_df.iterrows(),
-            total=len(self.wikidata_triplets_df),
+            wikidata_triplets_df.iterrows(),
+            total=len(wikidata_triplets_df),
             desc="Translating Wikibase items",
             unit="row",
         ):
@@ -408,9 +420,12 @@ class WikidataExtractor:
                 q_id = row["p_value"]
                 q_label = q_value_to_label.get(q_id)
                 if q_label:
-                    self.wikidata_triplets_df.at[index, "p_value"] = q_label
+                    wikidata_triplets_df.at[index, "p_value"] = q_label
 
-        return self.wikidata_triplets_df
+        # Save the updated DataFrame to the output .csv file
+        wikidata_triplets_df.to_csv(self.output_path, index=False)
+
+        return self.output_path
 
     def get_q_value_to_label(self) -> dict:
         """
@@ -452,15 +467,6 @@ class WikidataExtractor:
                         continue
 
         return q_value_to_label
-
-    def save_to_csv(self) -> None:
-        """
-        Save the extracted data to a CSV file.
-
-        This function saves the extracted data to a CSV file.
-        """
-
-        self.wikidata_triplets_df.to_csv(self.output_path, index=False)
 
 
 class WikidataExtractorQValues:
