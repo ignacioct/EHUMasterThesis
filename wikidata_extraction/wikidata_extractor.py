@@ -469,7 +469,7 @@ class WikidataExtractor:
         return q_value_to_label
 
 
-class WikidataExtractorQValues:
+class WikidataExtractorNegativeTriplets:
     def __init__(
         self,
         wikidata_dump_path: str,
@@ -535,6 +535,9 @@ class WikidataExtractorQValues:
         and extracts the relevant information for the specified properties. It accumulates
         the extracted data into a pandas DataFrame and returns it.
 
+        This class focuses on extracting the negative triplets for the specified Q-values, which are
+        those triplets that do not contain the specified p_values extracted in the positive triplets extraction.
+
         Args:
             total_limit (int, optional): The number of lines to process.
 
@@ -556,7 +559,7 @@ class WikidataExtractorQValues:
         # Open the compressed file
         with bz2.open(self.wikidata_dump_path, mode="rb") as f:
             # Use tqdm for a progress bar
-            with tqdm(desc="Processing lines", unit="line", total=total_limit) as pbar:
+            with tqdm(desc="Processing lines", unit="line") as pbar:
                 for i, line in enumerate(f):
                     # Stop if we reach the total limit
                     if counter >= total_limit:
@@ -593,7 +596,7 @@ class WikidataExtractorQValues:
                             # Iterate through the item's claims (properties)
                             for prop_id, prop_values in item.get("claims", {}).items():
                                 # Process only properties of interest
-                                if prop_id not in self.slots_id_list:
+                                if prop_id in self.slots_id_list:
                                     continue
 
                                 try:
@@ -631,10 +634,6 @@ class WikidataExtractorQValues:
                                     counter += 1  # Increment the counter
 
                                     pbar.update(1)  # Update the progress bar
-
-                                    # Also stop if we reach the total limit
-                                    if counter >= total_limit:
-                                        break
 
                                 except KeyError:
                                     # Handle missing expected keys in the property data

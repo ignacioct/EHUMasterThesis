@@ -5,7 +5,7 @@ Script for extracting the Wikidata triplets from the Wikidata dump file and savi
 import argparse
 
 import pandas as pd
-from wikidata_extractor import WikidataExtractor, WikidataExtractorQValues
+from wikidata_extractor import WikidataExtractor, WikidataExtractorNegativeValues
 
 
 def main() -> None:
@@ -34,8 +34,10 @@ def main() -> None:
         df = pd.read_csv("wikidata_triplets.csv")
         q_values = df["q_id"].unique()
 
-        extractor = WikidataExtractorQValues(
-            "../../data/wikidata/latest-all.json.bz2", q_values, "wikidata_triplets.csv"
+        extractor = WikidataExtractorNegativeValues(
+            "../../data/wikidata/latest-all.json.bz2",
+            q_values,
+            "wikidata_negative_triplets.csv",
         )
         extractor.extract()
         extractor.translate_wikibase_items()
