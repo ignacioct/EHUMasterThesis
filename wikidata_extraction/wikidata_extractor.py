@@ -526,7 +526,6 @@ class WikidataExtractorNegativeTriplets:
 
     def extract(
         self,
-        total_limit: int = 50000,
     ) -> pd.DataFrame:
         """
         Extract the relevant data from the Wikidata dump file.
@@ -561,10 +560,6 @@ class WikidataExtractorNegativeTriplets:
             # Use tqdm for a progress bar
             with tqdm(desc="Processing lines", unit="line") as pbar:
                 for i, line in enumerate(f):
-                    # Stop if we reach the total limit
-                    if counter >= total_limit:
-                        break
-
                     try:
                         # Decode the line and clean unnecessary characters
                         line_str = line.decode("utf-8").rstrip(",\n")
