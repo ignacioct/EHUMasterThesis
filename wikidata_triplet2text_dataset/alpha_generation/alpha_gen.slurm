@@ -11,7 +11,7 @@
 #SBATCH --mail-user=italavera002@ikasle.ehu.eus
 
 # Activate our required virtual environment
-source .venv/bin/activate
+source ../../.venv/bin/activate
 
 # Specify common cache for Transformers library
 export TRANSFORMERS_CACHE="/ncache/hub"

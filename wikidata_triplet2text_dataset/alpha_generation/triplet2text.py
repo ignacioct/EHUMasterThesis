@@ -53,7 +53,8 @@ def main():
                 "p_value_type": row["p_value_type"],
                 "positive_negative": row["positive_negative"],
                 "text": generated_text,
-            }
+            },
+            index=[0],
         )
 
         # Concatenate the new row to output_df
