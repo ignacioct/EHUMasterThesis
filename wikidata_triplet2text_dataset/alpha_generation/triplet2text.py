@@ -14,7 +14,7 @@ def main():
     )
 
     # Load the dataset
-    dataset = pd.read_csv("../../data/wikidata_triplet2text_alpha.csv")
+    dataset = pd.read_csv("wikidata_triplet2text_alpha.csv")
 
     # Set up the output dataframe
     output = pd.DataFrame(
