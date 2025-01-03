@@ -5,3 +5,5 @@ ipykernel
 pre-commit
 tqdm
 transformers
+Jinja2
+vllm
