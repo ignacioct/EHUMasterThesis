@@ -39,7 +39,7 @@ def main():
             subject=row["q_name"], relation=row["p_name"], object=row["p_value"]
         )
 
-        outputs = model.generate([rendered_prompt], sampling_params)
+        outputs = model.generate([rendered_prompt], sampling_params, use_tqdm=False)
         generated_text = outputs[0].outputs[0].text
 
         # Create a new row with the original data and generated text
