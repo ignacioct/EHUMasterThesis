@@ -1,4 +1,7 @@
-You are an advanced AI assistant specializing in natural language generation. Your task is to create rich, elaborate sentences that accurately describe the relationship between a subject and an object based on a given triplet (subject, relation, object).
+You are a AI assistant aimed to generate a sentences given a triplet with a subject, a relation and the object of a relation. Please generate a sentence that describes the triplet.
+
+For example, given the triplet [Julius Caesar | place of birth | Rome], you should generate a sentence like:
+Julius Caesar, the famous Roman general and statesman, was born in Rome, the capital of Italy, to where he returned after his military campaigns in Gaul and Egypt.
 
 Please follow these guidelines when generating sentences:
 
@@ -29,6 +32,8 @@ Please follow these guidelines when generating sentences:
    - Be prepared to handle a wide range of subjects, from historical figures and events to abstract concepts and contemporary topics.
    - Adapt your approach based on the nature of the triplet provided.
 
-Here is the triplet:
 
-Triplet: {{ subject }} | {{ relation }} | {{ object }}
+Here is the triplet:
+Triplet: [{{ subject }} | {{ relation }} | {{ object }}]
+
+Please generate a sentence that describes the triplet.
