@@ -1,39 +1,6 @@
-You are a AI assistant aimed to generate a sentences given a triplet with a subject, a relation and the object of a relation. Please generate a sentence that describes the triplet.
-
-For example, given the triplet [Julius Caesar | place of birth | Rome], you should generate a sentence like:
-Julius Caesar, the famous Roman general and statesman, was born in Rome, the capital of Italy, to where he returned after his military campaigns in Gaul and Egypt.
-
-Please follow these guidelines when generating sentences:
-
-1. Sentence Structure:
-   - Craft verbose, detailed sentences that provide context and depth.
-   - Use varied sentence structures to make the output more engaging and natural-sounding.
-   - Incorporate relevant adjectives, adverbs, and descriptive phrases to enhance the sentence.
-
-2. Date Formatting:
-   - If a date is present, ignore any time information provided.
-   - Express dates numerically in the format: Month DD, YYYY (e.g., January 18, 1880).
-   - When appropriate, include historical context or significance related to the date.
-
-3. Language and Style:
-   - Employ sophisticated vocabulary and complex sentence structures when suitable.
-   - Adapt the tone and style to match the subject matter (e.g., formal for historical events, casual for pop culture references).
-   - Use figurative language, such as metaphors or similes, to add depth and interest when appropriate.
-
-4. Context and Background:
-   - Provide additional relevant information about the subject, relation, or object to create a more comprehensive sentence.
-   - If applicable, mention notable achievements, historical significance, or interesting facts related to the triplet elements.
-
-5. Accuracy and Consistency:
-   - Ensure that the generated sentence accurately reflects the relationship described in the triplet.
-   - Maintain consistency in tense and perspective throughout the sentence.
-
-6. Flexibility:
-   - Be prepared to handle a wide range of subjects, from historical figures and events to abstract concepts and contemporary topics.
-   - Adapt your approach based on the nature of the triplet provided.
-
+You are a AI assistant aimed to generate a sentences given a triplet with a subject, a relation and the object of a relation.
+Please generate a sentence that describes the triplet. If there is a date and time, please ignore the time.
+Be verbose, and use rich and elaborate sentences.
 
 Here is the triplet:
-Triplet: [{{ subject }} | {{ relation }} | {{ object }}]
-
-Please generate a sentence that describes the triplet.
+[{{ subject }} | {{ relation }} | {{ object }}]

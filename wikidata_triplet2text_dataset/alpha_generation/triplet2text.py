@@ -6,11 +6,11 @@ from vllm import LLM, SamplingParams
 
 def main():
     # Define the LLM model
-    model = LLM(model="meta-llama/Meta-Llama-3.1-8B-Instruct")
+    model = LLM(model="meta-llama/Meta-Llama-3.1-8B")
 
     # Define the sampling parameters
     sampling_params = SamplingParams(
-        temperature=0.5,
+        temperature=0.7, top_p=0.95, max_tokens=100, stop=None
     )
 
     # Load the dataset
@@ -33,11 +33,14 @@ def main():
     for _, row in tqdm(
         dataset.iterrows(), total=len(dataset), desc="Generating text..."
     ):
-        with open("alpha_gen_template.jinja2") as file_:
+        with open("alpha_gen_template_advanced.jinja2") as file_:
             template = Template(file_.read())
         rendered_prompt = template.render(
             subject=row["q_name"], relation=row["p_name"], object=row["p_value"]
         )
+
+        print(rendered_prompt)
+        print("************************")
 
         outputs = model.generate([rendered_prompt], sampling_params, use_tqdm=False)
         generated_text = outputs[0].outputs[0].text
@@ -59,6 +62,9 @@ def main():
 
         # Concatenate the new row to output_df
         output = pd.concat([output, new_row], ignore_index=True)
+
+        print(outputs)
+        print("-----------------------------")
 
     # Save the output dataframe
     output.to_csv("wikidata_triplet2text_alpha_generated.csv", index=False)
