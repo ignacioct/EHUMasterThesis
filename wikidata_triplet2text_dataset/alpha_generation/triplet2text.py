@@ -6,7 +6,7 @@ from vllm import LLM, SamplingParams
 
 def main():
     # Define the LLM model
-    model = LLM(model="meta-llama/Meta-Llama-3.1-8B")
+    model = LLM(model="meta-llama/Meta-Llama-3.1-8B-Instruct")
 
     # Define the sampling parameters
     sampling_params = SamplingParams(
@@ -35,14 +35,16 @@ def main():
     ):
         with open("alpha_gen_template_advanced.jinja2") as file_:
             template = Template(file_.read())
-        rendered_prompt = template.render(
-            subject=row["q_name"], relation=row["p_name"], object=row["p_value"]
-        )
+        rendered_prompt = template.render()
 
-        print(rendered_prompt)
-        print("************************")
+        user_prompt = f"Here is the triplet:\nTriplet: [{row['q_name']} | {row['p_name']} | {row['p_value']}]\n\n Please generate a sentence that describes the triplet."
 
-        outputs = model.generate([rendered_prompt], sampling_params, use_tqdm=False)
+        chat_input = [
+            {"role": "system", "content": rendered_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        outputs = model.chat(chat_input, sampling_params, use_tqdm=False)
         generated_text = outputs[0].outputs[0].text
 
         # Create a new row with the original data and generated text
@@ -62,9 +64,6 @@ def main():
 
         # Concatenate the new row to output_df
         output = pd.concat([output, new_row], ignore_index=True)
-
-        print(outputs)
-        print("-----------------------------")
 
     # Save the output dataframe
     output.to_csv("wikidata_triplet2text_alpha_generated.csv", index=False)
