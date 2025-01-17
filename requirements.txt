@@ -4,6 +4,8 @@ seaborn
 ipykernel
 pre-commit
 tqdm
-transformers
+transformers[torch]
 Jinja2
 vllm
+wandb
+scikit-learn
