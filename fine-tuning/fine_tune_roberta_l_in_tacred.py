@@ -118,8 +118,8 @@ def train():
         train_args = TrainingArguments(
             do_train=True,
             do_eval=True,
-            evaluation_strategy="steps",
-            save_strategy="steps",
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
             per_device_train_batch_size=32,
             per_device_eval_batch_size=32,
             learning_rate=5e-6,
