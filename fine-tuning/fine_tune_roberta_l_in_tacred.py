@@ -18,7 +18,6 @@ from transformers import (
 # Log in to W&B using API key
 wandb.login(key="7bd265df21100baa9767bb9f69108bc417db4b4a")
 
-
 # Load tokenizer and model configuration
 model_name = "FacebookAI/roberta-large"
 tokenizer = AutoTokenizer.from_pretrained(
@@ -122,9 +121,9 @@ def train():
             save_strategy="epoch",
             per_device_train_batch_size=32,
             per_device_eval_batch_size=32,
-            learning_rate=5e-6,
+            learning_rate=0.00003,
             weight_decay=0.01,
-            num_train_epochs=10,
+            num_train_epochs=5,
             fp16=True,
             save_total_limit=1,
             load_best_model_at_end=True,
@@ -141,6 +140,8 @@ def train():
             compute_metrics=compute_metrics,
         )
         trainer.train()
+
+        trainer.save_model("fine-tuned-roberta-large-tacred")
 
 
 def main():
