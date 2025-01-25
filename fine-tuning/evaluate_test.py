@@ -11,8 +11,10 @@ from tacred_slots import TACRED_SLOTS
 from transformers import AutoTokenizer, DataCollatorWithPadding, Trainer
 
 # Load your saved model and tokenizer
-model = RobertaForEntityPairClassification.from_pretrained("checkpoint-3000")
-tokenizer = AutoTokenizer.from_pretrained("checkpoint-3000")
+model = RobertaForEntityPairClassification.from_pretrained(
+    "fine-tuned-roberta-large-tacred"
+)
+tokenizer = AutoTokenizer.from_pretrained("fine-tuned-roberta-large-tacred")
 head_token_id, tail_token_id = tokenizer.convert_tokens_to_ids(["[E1]", "[E2]"])
 
 
