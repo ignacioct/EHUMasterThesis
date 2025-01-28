@@ -119,15 +119,16 @@ def train():
             do_eval=True,
             evaluation_strategy="epoch",
             save_strategy="epoch",
-            per_device_train_batch_size=32,
-            per_device_eval_batch_size=32,
-            learning_rate=0.00003,
-            weight_decay=0.01,
+            per_device_train_batch_size=64,
+            per_device_eval_batch_size=64,
+            learning_rate=3e-5,
+            weight_decay=0,
             num_train_epochs=5,
             fp16=True,
             save_total_limit=1,
             load_best_model_at_end=True,
             output_dir="tmp/",
+            warmup_ratio=0.1,
         )
 
         trainer = Trainer(
