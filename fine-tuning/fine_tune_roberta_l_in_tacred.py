@@ -6,7 +6,7 @@ import wandb
 from datasets import ClassLabel, Dataset, DatasetDict, Features, Value
 from roberta_for_entity_pair_classification import RobertaForEntityPairClassification
 from sklearn.metrics import precision_recall_fscore_support
-from tacred_slots import TACRED_SLOTS
+from slots_definition import SLOTS_LIST
 from transformers import (
     AutoConfig,
     AutoTokenizer,
@@ -26,12 +26,12 @@ tokenizer = AutoTokenizer.from_pretrained(
 tokenizer.add_tokens(["[E1]", "[/E1]", "[E2]", "[/E2]"])
 head_token_id, tail_token_id = tokenizer.convert_tokens_to_ids(["[E1]", "[E2]"])
 
-config = AutoConfig.from_pretrained(model_name, num_labels=len(TACRED_SLOTS))
+config = AutoConfig.from_pretrained(model_name, num_labels=len(SLOTS_LIST))
 model = RobertaForEntityPairClassification.from_pretrained(model_name, config=config)
 model.resize_token_embeddings(len(tokenizer))
 
-model.config.label2id = {label: i for i, label in enumerate(TACRED_SLOTS)}
-model.config.id2label = {i: label for i, label in enumerate(TACRED_SLOTS)}
+model.config.label2id = {label: i for i, label in enumerate(SLOTS_LIST)}
+model.config.id2label = {i: label for i, label in enumerate(SLOTS_LIST)}
 model.config.head_token = "[E1]"
 model.config.head_token_id = head_token_id
 model.config.tail_token = "[E2]"
@@ -58,7 +58,7 @@ def compute_metrics(p):
     predictions, labels = p
     predictions = np.argmax(predictions, axis=-1)
     positive_labels = [
-        i for i, label in enumerate(TACRED_SLOTS) if label != "no_relation"
+        i for i, label in enumerate(SLOTS_LIST) if label != "no_relation"
     ]
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, predictions, labels=positive_labels, average="micro"
@@ -69,7 +69,7 @@ def compute_metrics(p):
 def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
     output = []
     for _, row in dataset.iterrows():
-        if row["relation"] not in TACRED_SLOTS:
+        if row["relation"] not in SLOTS_LIST:
             continue
         row["token"].insert(row["subj_start"], "[E1]")
         row["token"].insert(row["subj_end"] + 2, "[/E1]")
@@ -93,7 +93,7 @@ def preprocess_data(
             "text": Value(dtype="string"),
             "head": Value(dtype="string"),
             "tail": Value(dtype="string"),
-            "label": ClassLabel(names=TACRED_SLOTS),
+            "label": ClassLabel(names=SLOTS_LIST),
         }
     )
     return DatasetDict(
@@ -107,9 +107,9 @@ def preprocess_data(
 
 def train():
     with wandb.init(project="TACRED-RoBERTa-Large"):
-        train_data = pd.read_json("../data/tacred/train.json")
-        test_data = pd.read_json("../data/tacred/test.json")
-        valid_data = pd.read_json("../data/tacred/dev.json")
+        train_data = pd.read_csv("../data/tacred/train.csv")
+        test_data = pd.read_csv("../data/tacred/test.csv")
+        valid_data = pd.read_csv("../data/tacred/dev.csv")
 
         dataset = preprocess_data(train_data, test_data, valid_data)
         tokenized_dataset = dataset.map(tokenize_function, batched=True)

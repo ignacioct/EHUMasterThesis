@@ -82,11 +82,8 @@ def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
     return output
 
 
-def preprocess_data(
-    train_data: pd.DataFrame, test_data: pd.DataFrame, valid_data: pd.DataFrame
-) -> DatasetDict:
+def preprocess_data(train_data: pd.DataFrame, valid_data: pd.DataFrame) -> DatasetDict:
     train_output = convert_rows_to_training_dict(train_data)
-    test_output = convert_rows_to_training_dict(test_data)
     valid_output = convert_rows_to_training_dict(valid_data)
     features = Features(
         {
@@ -99,19 +96,20 @@ def preprocess_data(
     return DatasetDict(
         {
             "train": Dataset.from_list(train_output, features=features),
-            "test": Dataset.from_list(test_output, features=features),
             "valid": Dataset.from_list(valid_output, features=features),
         }
     )
 
 
 def train():
-    with wandb.init(project="TACRED-RoBERTa-Large"):
-        train_data = pd.read_json("../data/tacred/train.json")
-        test_data = pd.read_json("../data/tacred/test.json")
-        valid_data = pd.read_json("../data/tacred/dev.json")
+    with wandb.init(project="Wikidata-RoBERTa-Large"):
+        df = pd.read_csv("../data/wikidata_triplet2text_alpha_generated.csv")
 
-        dataset = preprocess_data(train_data, test_data, valid_data)
+        # Split the data into train (80%) and valid (20%) sets
+        train_data = df.sample(frac=0.8)
+        valid_data = df.drop(train_data.index)
+
+        dataset = preprocess_data(train_data, valid_data)
         tokenized_dataset = dataset.map(tokenize_function, batched=True)
 
         train_args = TrainingArguments(
