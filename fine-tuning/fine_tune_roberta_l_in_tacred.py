@@ -1,3 +1,4 @@
+import ast
 from typing import List
 
 import numpy as np
@@ -85,6 +86,11 @@ def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
 def preprocess_data(
     train_data: pd.DataFrame, test_data: pd.DataFrame, valid_data: pd.DataFrame
 ) -> DatasetDict:
+    # The token column comes as a string, but needs to be converted to list
+    train_data["token"] = train_data["token"].apply(ast.literal_eval)
+    test_data["token"] = test_data["token"].apply(ast.literal_eval)
+    valid_data["token"] = valid_data["token"].apply(ast.literal_eval)
+
     train_output = convert_rows_to_training_dict(train_data)
     test_output = convert_rows_to_training_dict(test_data)
     valid_output = convert_rows_to_training_dict(valid_data)
@@ -109,7 +115,7 @@ def train():
     with wandb.init(project="TACRED-RoBERTa-Large"):
         train_data = pd.read_csv("../data/tacred/train.csv")
         test_data = pd.read_csv("../data/tacred/test.csv")
-        valid_data = pd.read_csv("../data/tacred/dev.csv")
+        valid_data = pd.read_csv("../data/tacred/valid.csv")
 
         dataset = preprocess_data(train_data, test_data, valid_data)
         tokenized_dataset = dataset.map(tokenize_function, batched=True)
