@@ -127,7 +127,7 @@ def train():
             save_strategy="epoch",
             per_device_train_batch_size=64,
             per_device_eval_batch_size=64,
-            learning_rate=3e-5,
+            learning_rate=5e-4,
             weight_decay=0,
             num_train_epochs=5,
             fp16=True,

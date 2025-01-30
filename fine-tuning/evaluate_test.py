@@ -1,3 +1,4 @@
+import ast
 from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
@@ -7,7 +8,7 @@ import seaborn as sns
 from datasets import ClassLabel, Dataset, DatasetDict, Features, Value
 from roberta_for_entity_pair_classification import RobertaForEntityPairClassification
 from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
-from tacred_slots import TACRED_SLOTS
+from slots_definition import SLOTS_LIST
 from transformers import AutoTokenizer, DataCollatorWithPadding, Trainer
 
 # Load your saved model and tokenizer
@@ -31,12 +32,12 @@ def evaluate_model(trainer: Trainer, test_dataset) -> Tuple[Dict, np.ndarray, Li
     pred_classes = np.argmax(logits, axis=-1)
 
     # Get label names for better readability
-    label_names = [trainer.model.config.id2label[i] for i in range(len(TACRED_SLOTS))]
+    label_names = [trainer.model.config.id2label[i] for i in range(len(SLOTS_LIST))]
 
     # Calculate metrics for all relations
     metrics = {}
     precision, recall, f1, _ = precision_recall_fscore_support(
-        labels, pred_classes, average=None, labels=range(len(TACRED_SLOTS))
+        labels, pred_classes, average=None, labels=range(len(SLOTS_LIST))
     )
 
     # Store per-class metrics
@@ -62,9 +63,7 @@ def evaluate_model(trainer: Trainer, test_dataset) -> Tuple[Dict, np.ndarray, Li
     )
 
     # Calculate confusion matrix
-    conf_matrix = confusion_matrix(
-        labels, pred_classes, labels=range(len(TACRED_SLOTS))
-    )
+    conf_matrix = confusion_matrix(labels, pred_classes, labels=range(len(SLOTS_LIST)))
 
     return metrics, conf_matrix, label_names
 
@@ -95,7 +94,7 @@ def plot_confusion_matrix(conf_matrix: np.ndarray, labels: List[str], output_pat
 def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
     output = []
     for _, row in dataset.iterrows():
-        if row["relation"] not in TACRED_SLOTS:
+        if row["relation"] not in SLOTS_LIST:
             continue
         row["token"].insert(row["subj_start"], "[E1]")
         row["token"].insert(row["subj_end"] + 2, "[/E1]")
@@ -109,13 +108,16 @@ def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
 
 
 def preprocess_data(test_data: pd.DataFrame) -> DatasetDict:
+    # The token column comes as a string, but needs to be converted to list
+    test_data["token"] = test_data["token"].apply(ast.literal_eval)
+
     test_output = convert_rows_to_training_dict(test_data)
     features = Features(
         {
             "text": Value(dtype="string"),
             "head": Value(dtype="string"),
             "tail": Value(dtype="string"),
-            "label": ClassLabel(names=TACRED_SLOTS),
+            "label": ClassLabel(names=SLOTS_LIST),
         }
     )
     return DatasetDict(
@@ -141,7 +143,7 @@ def tokenize_function(examples):
 
 def main():
     # Load and preprocess test data
-    test_data = pd.read_json("../data/tacred/test.json")
+    test_data = pd.read_csv("../data/tacred/test.csv")
     dataset = preprocess_data(test_data)
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
 

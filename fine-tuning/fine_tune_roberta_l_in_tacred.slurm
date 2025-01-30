@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --output=LOG_FITXATEGIKO_PATH.log
 #SBATCH --error=ERRORE_FITXATEGIKO_PATH.err
 #SBATCH --mail-type=REQUEUE
