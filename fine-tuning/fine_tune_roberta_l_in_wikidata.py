@@ -6,7 +6,6 @@ import wandb
 from datasets import ClassLabel, Dataset, DatasetDict, Features, Value
 from roberta_for_entity_pair_classification import RobertaForEntityPairClassification
 from sklearn.metrics import precision_recall_fscore_support
-from slots_definition import SLOTS_LIST
 from transformers import (
     AutoConfig,
     AutoTokenizer,
@@ -14,6 +13,41 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+WIKIDATA2OUR_SLOTS = {
+    "charge": "per:charges",
+    "relative": "per:other_family",
+    "sibling": "per:siblings",
+    "father": "per:parents",
+    "mother": "per:parents",
+    "child": "per:children",
+    "spouse": "per:spouse",
+    "religion_or_worldview": "per:religion",
+    "employer": "per:employee_or_member_of",
+    "noble_title": "per:title",
+    "educated_at": "per:schools_attended",
+    "residence": "per:place_of_residence",
+    "cause_of_death": "per:cause_of_death",
+    "place_of_death": "per:place_of_death",
+    "date_of_death": "per:date_of_death",
+    "place_of_birth": "per:place_of_birth",
+    "date_of_birth": "per:date_of_birth",
+    "alternative_name": "per:alternative_names",
+    "official_website": "org:website",
+    "owned_by": "org:shareholders",
+    "headquarters_location": "org:headquarters_location",
+    "dissolved_abolished_or_demolished": "org:date_dissolved",
+    "inception": "org:date_founded",
+    "founder": "org:founded_by",
+    "parent_organization": "org:parent_organization",
+    "subsidiary": "org:subsidiaries",
+    "member_of": "org:member_of",
+    "number_of_employees": "org:number_of_employees_members",
+    "no_relation": "no_relation",
+}
+
+# Define Wikidata relation slots as the unique set of values from WIKIDATA2OUR_SLOTS
+SLOTS_LIST = list(set(WIKIDATA2OUR_SLOTS.values()))
 
 # Log in to W&B using API key
 wandb.login(key="7bd265df21100baa9767bb9f69108bc417db4b4a")
@@ -68,38 +102,16 @@ def compute_metrics(p):
 
 def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
     output = []
-    counter = 0
-
     # We need to create columns in the dataset for the start and end positions of the subject and object
-    for index, row in dataset.iterrows():
-        try:
-            # Find the start position of row["q_name"] in row["text"] and place "[E1]" before it
-            dataset.at[index, "subj_start"] = row["text"].index(row["q_name"])
-            # Find the end position of row["q_name"] in row["text"] and place "[/E1]" after it
-            dataset.at[index, "subj_end"] = (
-                row["text"].index(row["q_name"]) + len(row["q_name"]) - 1
-            )
-
-            # Find the start position of row["p_value"] in row["text"] and place "[E2]" before it
-            dataset.at[index, "obj_start"] = row["text"].index(row["p_value"])
-            # Find the end position of row["p_value"] in row["text"] and place "[/E2]" after it
-            dataset.at[index, "obj_end"] = (
-                row["text"].index(row["p_value"]) + len(row["p_value"]) - 1
-            )
-
-        except ValueError:
-            # print("-----------")
-            # print(row["text"])
-            # print(row["q_name"])
-            # print(row["p_value"])
-            # print("-----------")
-            counter += 1
-            continue
-
+    for _, row in dataset.iterrows():
         output.append(
-            {"text": row["text"], "head": "T1", "tail": "T2", "label": row["p_name"]}
+            {
+                "text": row["transformed_text"],
+                "head": "T1",
+                "tail": "T2",
+                "label": row["relation"],
+            }
         )
-    print(f"Number of rows with missing values: {counter}")
     return output
 
 
