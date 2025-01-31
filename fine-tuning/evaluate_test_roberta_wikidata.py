@@ -136,7 +136,7 @@ def tokenize_function(examples):
     return result
 
 
-def evaluate_wikidata(df: Dataset, output_str) -> str:
+def evaluate_wikidata(df: Dataset) -> str:
     # Evaluate on Wikidata test data
     dataset = preprocess_data_wikidata(df)
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
@@ -156,41 +156,49 @@ def evaluate_wikidata(df: Dataset, output_str) -> str:
     )
 
     # Print metrics
-    output_str += "\nEvaluation over Wikidata test set:"
-    output_str += f"\nMicro Precision: {metrics['micro_precision']:.4f}"
-    output_str += f"\nMicro Recall: {metrics['micro_recall']:.4f}"
-    output_str += f"\nMicro F1: {metrics['micro_f1']:.4f}"
+    results_df = pd.DataFrame(
+        columns=["Category", "Micro Precision", "Micro Recall", "Micro F1"]
+    )
+    overall_metrics_row = pd.DataFrame(
+        {
+            "Category": "Overall",
+            "Micro Precision": metrics["micro_precision"],
+            "Micro Recall": metrics["micro_recall"],
+            "Micro F1": metrics["micro_f1"],
+        },
+        index=[0],
+    )
+    results_df = pd.concat([results_df, overall_metrics_row], ignore_index=True)
 
-    output_str += "\nPer-relation metrics:"
     for label in label_names:
         if label != "no_relation":
-            output_str += f"\n{label}:"
-            output_str += f"\nPrecision: {metrics[f'{label}_precision']:.4f}"
-            output_str += f"\nRecall: {metrics[f'{label}_recall']:.4f}"
-            output_str += f"\nF1: {metrics[f'{label}_f1']:.4f}"
+            new_row = pd.DataFrame(
+                {
+                    "Category": label,
+                    "Micro Precision": metrics[f"{label}_precision"],
+                    "Micro Recall": metrics[f"{label}_recall"],
+                    "Micro F1": metrics[f"{label}_f1"],
+                },
+                index=[0],
+            )
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
 
-    output_str += "\n\n\n"
+    results_df.to_csv("results_test_wikidata_testset_wikidata.csv", index=False)
+
     # Plot confusion matrix
-    plot_confusion_matrix(conf_matrix, label_names, "confusion_matrix_wikidata.png")
-
-    return output_str
+    plot_confusion_matrix(
+        conf_matrix, label_names, "confusion_matrix_wikidata_testset_wikidata.png"
+    )
 
 
 def main():
-    # Create a string representation of the output
-    output_str = ""
-
     # Load and preprocess test data
     test_data_wikidata = pd.read_csv(
         "../data/wikidata_triplet2text_alpha/wikidata_triplet2text_alpha_generated_test.csv"
     )
     # test_data_tacred = pd.read_csv("../data/tacred/test.csv")
 
-    output_str = evaluate_wikidata(test_data_wikidata, output_str)
-
-    # Print the output string in a file
-    with open("results_test_wikidata.txt", "w") as f:
-        f.write(output_str)
+    evaluate_wikidata(test_data_wikidata)
 
 
 if __name__ == "__main__":

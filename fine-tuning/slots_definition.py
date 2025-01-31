@@ -29,4 +29,5 @@ SLOTS_LIST = [
     "per:place_of_birth",
     "org:number_of_employees_members",
     "per:charges",
+    "no_relation",
 ]

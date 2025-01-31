@@ -11,13 +11,6 @@ from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from slots_definition import SLOTS_LIST
 from transformers import AutoTokenizer, DataCollatorWithPadding, Trainer
 
-# Load your saved model and tokenizer
-model = RobertaForEntityPairClassification.from_pretrained(
-    "fine-tuned-roberta-large-tacred"
-)
-tokenizer = AutoTokenizer.from_pretrained("fine-tuned-roberta-large-tacred")
-head_token_id, tail_token_id = tokenizer.convert_tokens_to_ids(["[E1]", "[E2]"])
-
 
 def evaluate_model(trainer: Trainer, test_dataset) -> Tuple[Dict, np.ndarray, List]:
     """
@@ -127,24 +120,32 @@ def preprocess_data(test_data: pd.DataFrame) -> DatasetDict:
     )
 
 
-def tokenize_function(examples):
-    result = tokenizer(examples["text"], padding=False, truncation=True)
-    result["head_pos"] = [
-        next((i for i, token in enumerate(tokens) if token == head_token_id), -1)
-        for tokens in result["input_ids"]
-    ]
-    result["tail_pos"] = [
-        next((i for i, token in enumerate(tokens) if token == tail_token_id), -1)
-        for tokens in result["input_ids"]
-    ]
-    result["label"] = examples["label"]
-    return result
-
-
 def main():
     # Load and preprocess test data
     test_data = pd.read_csv("../data/tacred/test.csv")
     dataset = preprocess_data(test_data)
+
+    # Define model and tokenizer
+    model = RobertaForEntityPairClassification.from_pretrained(
+        "fine-tuned-roberta-large-tacred"
+    )
+    tokenizer = AutoTokenizer.from_pretrained("fine-tuned-roberta-large-tacred")
+    head_token_id, tail_token_id = tokenizer.convert_tokens_to_ids(["[E1]", "[E2]"])
+
+    def tokenize_function(examples):
+        result = tokenizer(examples["text"], padding=False, truncation=True)
+        result["head_pos"] = [
+            next((i for i, token in enumerate(tokens) if token == head_token_id), -1)
+            for tokens in result["input_ids"]
+        ]
+        result["tail_pos"] = [
+            next((i for i, token in enumerate(tokens) if token == tail_token_id), -1)
+            for tokens in result["input_ids"]
+        ]
+        result["label"] = examples["label"]
+        return result
+
+    # Tokenize the dataset
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
 
     data_collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
@@ -162,21 +163,35 @@ def main():
     )
 
     # Print metrics
-    print("\nOverall Metrics:")
-    print(f"Micro Precision: {metrics['micro_precision']:.4f}")
-    print(f"Micro Recall: {metrics['micro_recall']:.4f}")
-    print(f"Micro F1: {metrics['micro_f1']:.4f}")
+    results_df = pd.DataFrame(
+        columns=["Category", "Micro Precision", "Micro Recall", "Micro F1"]
+    )
+    overall_metrics_row = pd.DataFrame(
+        {
+            "Category": "Overall",
+            "Micro Precision": metrics["micro_precision"],
+            "Micro Recall": metrics["micro_recall"],
+            "Micro F1": metrics["micro_f1"],
+        },
+        index=[0],
+    )
+    results_df = pd.concat([results_df, overall_metrics_row], ignore_index=True)
 
-    print("\nPer-relation metrics:")
     for label in label_names:
         if label != "no_relation":
-            print(f"\n{label}:")
-            print(f"Precision: {metrics[f'{label}_precision']:.4f}")
-            print(f"Recall: {metrics[f'{label}_recall']:.4f}")
-            print(f"F1: {metrics[f'{label}_f1']:.4f}")
+            new_row = pd.DataFrame(
+                {
+                    "Category": label,
+                    "Micro Precision": metrics[f"{label}_precision"],
+                    "Micro Recall": metrics[f"{label}_recall"],
+                    "Micro F1": metrics[f"{label}_f1"],
+                },
+                index=[0],
+            )
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
 
-    # Plot confusion matrix
-    plot_confusion_matrix(conf_matrix, label_names, "confusion_matrix.png")
+    results_df.to_csv("results_test_tacred.csv", index=False)
+    plot_confusion_matrix(conf_matrix, label_names, "confusion_matrix_tacred.png")
 
 
 if __name__ == "__main__":
