@@ -6,7 +6,7 @@ import wandb
 from datasets import ClassLabel, Dataset, DatasetDict, Features, Value
 from roberta_for_entity_pair_classification import RobertaForEntityPairClassification
 from sklearn.metrics import precision_recall_fscore_support
-from tacred_slots import TACRED_SLOTS
+from slots_definition import SLOTS_LIST
 from transformers import (
     AutoConfig,
     AutoTokenizer,
@@ -26,12 +26,12 @@ tokenizer = AutoTokenizer.from_pretrained(
 tokenizer.add_tokens(["[E1]", "[/E1]", "[E2]", "[/E2]"])
 head_token_id, tail_token_id = tokenizer.convert_tokens_to_ids(["[E1]", "[E2]"])
 
-config = AutoConfig.from_pretrained(model_name, num_labels=len(TACRED_SLOTS))
+config = AutoConfig.from_pretrained(model_name, num_labels=len(SLOTS_LIST))
 model = RobertaForEntityPairClassification.from_pretrained(model_name, config=config)
 model.resize_token_embeddings(len(tokenizer))
 
-model.config.label2id = {label: i for i, label in enumerate(TACRED_SLOTS)}
-model.config.id2label = {i: label for i, label in enumerate(TACRED_SLOTS)}
+model.config.label2id = {label: i for i, label in enumerate(SLOTS_LIST)}
+model.config.id2label = {i: label for i, label in enumerate(SLOTS_LIST)}
 model.config.head_token = "[E1]"
 model.config.head_token_id = head_token_id
 model.config.tail_token = "[E2]"
@@ -58,7 +58,7 @@ def compute_metrics(p):
     predictions, labels = p
     predictions = np.argmax(predictions, axis=-1)
     positive_labels = [
-        i for i, label in enumerate(TACRED_SLOTS) if label != "no_relation"
+        i for i, label in enumerate(SLOTS_LIST) if label != "no_relation"
     ]
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, predictions, labels=positive_labels, average="micro"
@@ -68,17 +68,38 @@ def compute_metrics(p):
 
 def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
     output = []
-    for _, row in dataset.iterrows():
-        if row["relation"] not in TACRED_SLOTS:
+    counter = 0
+
+    # We need to create columns in the dataset for the start and end positions of the subject and object
+    for index, row in dataset.iterrows():
+        try:
+            # Find the start position of row["q_name"] in row["text"] and place "[E1]" before it
+            dataset.at[index, "subj_start"] = row["text"].index(row["q_name"])
+            # Find the end position of row["q_name"] in row["text"] and place "[/E1]" after it
+            dataset.at[index, "subj_end"] = (
+                row["text"].index(row["q_name"]) + len(row["q_name"]) - 1
+            )
+
+            # Find the start position of row["p_value"] in row["text"] and place "[E2]" before it
+            dataset.at[index, "obj_start"] = row["text"].index(row["p_value"])
+            # Find the end position of row["p_value"] in row["text"] and place "[/E2]" after it
+            dataset.at[index, "obj_end"] = (
+                row["text"].index(row["p_value"]) + len(row["p_value"]) - 1
+            )
+
+        except ValueError:
+            # print("-----------")
+            # print(row["text"])
+            # print(row["q_name"])
+            # print(row["p_value"])
+            # print("-----------")
+            counter += 1
             continue
-        row["token"].insert(row["subj_start"], "[E1]")
-        row["token"].insert(row["subj_end"] + 2, "[/E1]")
-        row["token"].insert(row["obj_start"], "[E2]")
-        row["token"].insert(row["obj_end"] + 2, "[/E2]")
-        text = " ".join(row["token"])
+
         output.append(
-            {"text": text, "head": "T1", "tail": "T2", "label": row["relation"]}
+            {"text": row["text"], "head": "T1", "tail": "T2", "label": row["p_name"]}
         )
+    print(f"Number of rows with missing values: {counter}")
     return output
 
 
@@ -90,7 +111,7 @@ def preprocess_data(train_data: pd.DataFrame, valid_data: pd.DataFrame) -> Datas
             "text": Value(dtype="string"),
             "head": Value(dtype="string"),
             "tail": Value(dtype="string"),
-            "label": ClassLabel(names=TACRED_SLOTS),
+            "label": ClassLabel(names=SLOTS_LIST),
         }
     )
     return DatasetDict(
@@ -103,11 +124,12 @@ def preprocess_data(train_data: pd.DataFrame, valid_data: pd.DataFrame) -> Datas
 
 def train():
     with wandb.init(project="Wikidata-RoBERTa-Large"):
-        df = pd.read_csv("../data/wikidata_triplet2text_alpha_generated.csv")
-
-        # Split the data into train (80%) and valid (20%) sets
-        train_data = df.sample(frac=0.8)
-        valid_data = df.drop(train_data.index)
+        train_data = pd.read_csv(
+            "../data/wikidata_triplet2text_alpha/wikidata_triplet2text_alpha_generated_train.csv"
+        )
+        valid_data = pd.read_csv(
+            "../data/wikidata_triplet2text_alpha/wikidata_triplet2text_alpha_generated_valid.csv"
+        )
 
         dataset = preprocess_data(train_data, valid_data)
         tokenized_dataset = dataset.map(tokenize_function, batched=True)
