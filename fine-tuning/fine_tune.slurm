@@ -17,4 +17,4 @@ source ../.venv/bin/activate
 export TRANSFORMERS_CACHE="/ncache/hub"
 
 # # Specify common cache for Transformers library
-srun python fine_tune_roberta_l_in_tacred.py
+srun python fine_tune_roberta_l_in_wikidata.py

@@ -1,4 +1,4 @@
-# Define TACRED relation slots
+# Define our relation slots
 SLOTS_LIST = [
     "org:parent_organization",
     "per:spouse",

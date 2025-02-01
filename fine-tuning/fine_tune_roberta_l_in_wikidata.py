@@ -173,7 +173,7 @@ def train() -> None:
             save_strategy="epoch",
             per_device_train_batch_size=32,
             per_device_eval_batch_size=32,
-            learning_rate=4e-5,
+            learning_rate=3e-5,
             weight_decay=0,
             num_train_epochs=5,
             fp16=True,
