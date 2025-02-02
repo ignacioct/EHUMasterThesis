@@ -1,3 +1,4 @@
+import ast
 from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
@@ -136,7 +137,7 @@ def tokenize_function(examples):
     return result
 
 
-def evaluate_wikidata(df: Dataset) -> str:
+def evaluate_wikidata(df: Dataset) -> None:
     # Evaluate on Wikidata test data
     dataset = preprocess_data_wikidata(df)
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
@@ -191,14 +192,104 @@ def evaluate_wikidata(df: Dataset) -> str:
     )
 
 
+def preprocess_data_tacred(test_data: pd.DataFrame) -> DatasetDict:
+    def convert_rows_to_training_dict(dataset: pd.DataFrame) -> List:
+        output = []
+        for _, row in dataset.iterrows():
+            if row["relation"] not in SLOTS_LIST:
+                continue
+            row["token"].insert(row["subj_start"], "[E1]")
+            row["token"].insert(row["subj_end"] + 2, "[/E1]")
+            row["token"].insert(row["obj_start"], "[E2]")
+            row["token"].insert(row["obj_end"] + 2, "[/E2]")
+            text = " ".join(row["token"])
+            output.append(
+                {"text": text, "head": "T1", "tail": "T2", "label": row["relation"]}
+            )
+        return output
+
+    # The token column comes as a string, but needs to be converted to list
+    test_data["token"] = test_data["token"].apply(ast.literal_eval)
+
+    test_output = convert_rows_to_training_dict(test_data)
+    features = Features(
+        {
+            "text": Value(dtype="string"),
+            "head": Value(dtype="string"),
+            "tail": Value(dtype="string"),
+            "label": ClassLabel(names=SLOTS_LIST),
+        }
+    )
+    return DatasetDict(
+        {
+            "test": Dataset.from_list(test_output, features=features),
+        }
+    )
+
+
+def evaluate_tacred(df: Dataset) -> None:
+    dataset = preprocess_data_tacred(df)
+
+    tokenized_dataset = dataset.map(tokenize_function, batched=True)
+
+    data_collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
+
+    # Create trainer
+    trainer = Trainer(
+        model=model,
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+    )
+
+    # Evaluate
+    metrics, conf_matrix, label_names = evaluate_model(
+        trainer, tokenized_dataset["test"]
+    )
+
+    # Print metrics
+    results_df = pd.DataFrame(
+        columns=["Category", "Micro Precision", "Micro Recall", "Micro F1"]
+    )
+    overall_metrics_row = pd.DataFrame(
+        {
+            "Category": "Overall",
+            "Micro Precision": metrics["micro_precision"],
+            "Micro Recall": metrics["micro_recall"],
+            "Micro F1": metrics["micro_f1"],
+        },
+        index=[0],
+    )
+    results_df = pd.concat([results_df, overall_metrics_row], ignore_index=True)
+
+    for label in label_names:
+        if label != "no_relation":
+            new_row = pd.DataFrame(
+                {
+                    "Category": label,
+                    "Micro Precision": metrics[f"{label}_precision"],
+                    "Micro Recall": metrics[f"{label}_recall"],
+                    "Micro F1": metrics[f"{label}_f1"],
+                },
+                index=[0],
+            )
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+    results_df.to_csv("results_test_wikidata_testset_tacred.csv", index=False)
+    plot_confusion_matrix(
+        conf_matrix, label_names, "confusion_matrix_wikidata_testset_tacred.png"
+    )
+
+
 def main():
     # Load and preprocess test data
     test_data_wikidata = pd.read_csv(
         "../data/wikidata_triplet2text_alpha/wikidata_triplet2text_alpha_generated_test.csv"
     )
-    # test_data_tacred = pd.read_csv("../data/tacred/test.csv")
+    test_data_tacred = pd.read_csv("../data/tacred/test.csv")
 
     evaluate_wikidata(test_data_wikidata)
+
+    evaluate_tacred(test_data_tacred)
 
 
 if __name__ == "__main__":
