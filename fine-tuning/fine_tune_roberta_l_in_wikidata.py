@@ -101,10 +101,10 @@ def train() -> None:
     with wandb.init(project="Wikidata-RoBERTa-Large"):
         # Load & preprocess datasets
         train_data = pd.read_csv(
-            "../data/wikidata_triplet2text_alpha/wikidata_triplet2text_alpha_generated_train.csv"
+            "../data/wikidata_triplet2text_beta/wikidata_triplet2text_beta_generated_train.csv"
         )
         valid_data = pd.read_csv(
-            "../data/wikidata_triplet2text_alpha/wikidata_triplet2text_alpha_generated_valid.csv"
+            "../data/wikidata_triplet2text_beta/wikidata_triplet2text_beta_generated_valid.csv"
         )
 
         dataset = preprocess_data(train_data, valid_data)

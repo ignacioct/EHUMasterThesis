@@ -5,6 +5,12 @@ __pycache__/
 
 models/
 
+tmp/
+
+wandb/
+
+tmp_trainer/
+
 # C extensions
 *.so
 

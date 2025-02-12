@@ -13,9 +13,9 @@ from transformers import AutoTokenizer, DataCollatorWithPadding, Trainer
 
 # Load your saved model and tokenizer
 model = RobertaForEntityPairClassification.from_pretrained(
-    "fine-tuned-roberta-large-wikidata"
+    "fine-tuned-roberta-large-wikidata-beta"
 )
-tokenizer = AutoTokenizer.from_pretrained("fine-tuned-roberta-large-wikidata")
+tokenizer = AutoTokenizer.from_pretrained("fine-tuned-roberta-large-wikidata-beta")
 head_token_id, tail_token_id = tokenizer.convert_tokens_to_ids(["[E1]", "[E2]"])
 
 
@@ -283,7 +283,7 @@ def evaluate_tacred(df: Dataset) -> None:
 def main():
     # Load and preprocess test data
     test_data_wikidata = pd.read_csv(
-        "../data/wikidata_triplet2text_alpha/wikidata_triplet2text_alpha_generated_test.csv"
+        "../data/wikidata_triplet2text_beta/wikidata_triplet2text_beta_generated_test.csv"
     )
     test_data_tacred = pd.read_csv("../data/tacred/test.csv")
 

@@ -127,9 +127,9 @@ def main():
 
     # Define model and tokenizer
     model = RobertaForEntityPairClassification.from_pretrained(
-        "fine-tuned-roberta-large-tacred"
+        "fine-tuned-roberta-large-wikidata-beta"
     )
-    tokenizer = AutoTokenizer.from_pretrained("fine-tuned-roberta-large-tacred")
+    tokenizer = AutoTokenizer.from_pretrained("fine-tuned-roberta-large-wikidata-beta")
     head_token_id, tail_token_id = tokenizer.convert_tokens_to_ids(["[E1]", "[E2]"])
 
     def tokenize_function(examples):
